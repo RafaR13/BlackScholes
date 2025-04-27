@@ -1,67 +1,47 @@
-import numpy as np
+import argparse
+from dataRetriever import DataRetriever
+from blackScholes import BlackScholesFD
 
-# input variables
-sig = 0.2
-rate = 0.05
-# mu = 0
-strike = 100
-expiration = 1
-t = 0
-nt = 36*(2**12)
-max_S = 200
-nS = 20 + 1
+def main():
+    parser = argparse.ArgumentParser(description="Simple Black-Scholes CLI App")
+    parser.add_argument("ticker", type=str, help="Stock Ticker (e.g., AAPL, TSLA)")
+    parser.add_argument("strike", type=float, help="Strike Price (e.g., 150)")
+    parser.add_argument("expiry", type=str, help="Option Expiry Date (YYYY-MM-DD)")
+    
+    args = parser.parse_args()
 
+    try:
+        print("\nFetching market data...")
+        retriever = DataRetriever(args.ticker, args.strike, args.expiry)
+        retriever.fetch_data()
+        stock_price, call_price, risk_free_rate, time_to_expiry = retriever.get_data()
 
-dt = 1/nt
-min_S = 0
-ds = (max_S - min_S)/(nS-1)
+        print(f"\nRetrieved data:")
+        print(f"Current Stock Price: {stock_price:.2f}")
+        print(f"Strike Price: {args.strike:.2f}")
+        print(f"Call Option Price: {call_price:.2f}")
+        print(f"Risk-Free Rate: {risk_free_rate*100:.2f}%")
+        print(f"Time to Expiry: {time_to_expiry:.2f} years\n")
 
+        print("Running Black-Scholes Finite Difference solver...")
+        solver = BlackScholesFD(
+            strike=args.strike,
+            rate=risk_free_rate,
+            sigma=0.2,  # TODO: implement
+            T=time_to_expiry,
+            S_max=2 * stock_price,  # set S_max dynamic
+            nS=100  # TODO: change according to what accuracy we want
+        )
+        solver.solve()
 
-def calc_a(t,S):
-    return 0.5 * dt * ((sig*S/ds)**2 - rate * S/ds)
+        # Find the closest stock price index
+        idx = (abs(solver.S_grid - stock_price)).argmin()
+        option_price_fd = solver.surface[0, idx]
 
-def calc_b(t,S):
-    return 1 - (rate + (sig*S/ds)**2) * dt
+        print(f"\nFinite Difference Approximated Option Price: {option_price_fd:.2f}")
 
-def calc_c(t,S):
-    return 0.5 * dt * ((sig*S/ds)**2 + rate * S/ds)
+    except Exception as e:
+        print(f"Error: {e}")
 
-if __name__ == '__main__':
-
-    surface = []
-
-    sol = []
-
-    S = min_S
-
-    while S <= max_S:
-        sol.append(max(S - strike,0))
-        S += ds
-
-    surface.append(sol)
-
-    t_i = 0
-    while t + dt <= expiration:
-        #print(t)
-        t_i += 1
-        t += dt
-
-        new_sol = []
-
-        S = min_S
-        i = 0
-
-        new_sol.append(0)
-
-        while S + ds < max_S:
-            S += ds
-            i += 1
-            new_sol.append(calc_a(t-dt, S) * surface[t_i-1][i-1] + calc_b(t-dt, S) * surface[t_i-1][i]  + calc_c(t-dt, S) * surface[t_i-1][i+1])
-
-        new_sol.append(2*new_sol[i] - new_sol[i-1])
-
-        surface.append(new_sol)
-    #print(t)
-    print(surface[-1][6:15])
-    #for i in surface:
-    #print(i[6:15])
+if __name__ == "__main__":
+    main()
