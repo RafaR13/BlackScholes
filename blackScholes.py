@@ -1,7 +1,8 @@
 import numpy as np
 
 class BlackScholesFD:
-    def __init__(self, strike=100, rate=0.05, sigma=0.2, T=0, S_max=200, S_min=0, nS=21, nt=36*(2**12)):
+    def __init__(self, strike=100, rate=0.05, sigma=0.2, T=0, S_max=200, S_min=0, nS=21, nt=36*(2**12), call=True):
+        self.call = call # true for call, false for put
         self.strike = strike
         self.rate = rate
         self.sigma = sigma
@@ -23,7 +24,7 @@ class BlackScholesFD:
         self.surface = np.zeros((nt+1, nS+1))
 
         # Set terminal condition (payoff at expiry)
-        self.surface[-1] = np.maximum(self.S_grid - self.strike, 0)
+        self.surface[-1] = np.maximum(self.S_grid - self.strike, 0) if call else np.maximum(self.strike - self.S_grid, 0)
 
         # Boundary conditions
         self.surface[:, 0] = 0  # Call option worthless if S=0
@@ -43,8 +44,8 @@ class BlackScholesFD:
                         ( c * self.surface[j+1, i+1] )
 
             # Boundary conditions
-            self.surface[j, 0] = 0
-            self.surface[j, -1] = self.S_max - self.strike * np.exp(-self.rate * (self.T - j*self.dt))
+            self.surface[j, 0] = 0 if self.call else self.strike * np.exp(-self.rate * (self.T - j * self.dt))
+            self.surface[j, -1] = self.S_max - self.strike * np.exp(-self.rate * (self.T - j*self.dt)) if self.call else 0
             #self.surface[j, -1] = 2 * self.surface[j, -2] - self.surface[j, -3]
     
     def calc_a(self, s):
